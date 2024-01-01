@@ -14,11 +14,19 @@ document.addEventListener('DOMContentLoaded', function () {
   // By default, load the inbox
   load_mailbox('inbox');
 
-  // Prevent default submit click
+  // Prevent default submit click for compose-form
   const composeForm = document.querySelector('#compose-form');
   composeForm.addEventListener('submit', function (event) {
     event.preventDefault();
-    console.log('composeForm class prevented');
+    console.log('composeForm ID prevented');
+    send_email(); // Call send_email function after preventing default
+  });
+
+  // Prevent default submit click for reply-form
+  const replyForm = document.querySelector('#reply-form');
+  replyForm.addEventListener('submit', function (event) {
+    event.preventDefault();
+    console.log('replyForm ID prevented');
     send_email(); // Call send_email function after preventing default
   });
 });
@@ -27,11 +35,31 @@ function compose_email() {
   // Show compose view and hide other views
   document.querySelector('#emails-view').style.display = 'none';
   document.querySelector('#compose-view').style.display = 'block';
+  document.querySelector('#reply-view').style.display = 'none';
 
   // Clear out composition fields
   document.querySelector('#compose-recipients').value = '';
   document.querySelector('#compose-subject').value = '';
   document.querySelector('#compose-body').value = '';
+}
+
+function reply_email(email) {
+  // Show compose view and hide other views
+  document.querySelector('#emails-view').style.display = 'none';
+  document.querySelector('#compose-view').style.display = 'none';
+  document.querySelector('#reply-view').style.display = 'block';
+
+  // Pre-fill composition fields
+  const originalSubject = email.subject;
+  const replySubject = originalSubject.startsWith('Re: ')
+    ? originalSubject
+    : `Re: ${originalSubject}`;
+
+  const replyBody = `\n\n\n\n\n\n\n\nOn ${email.timestamp} ${email.sender} wrote:\n${email.body}`;
+
+  document.querySelector('#reply-recipients').value = email.sender;
+  document.querySelector('#reply-subject').value = replySubject;
+  document.querySelector('#reply-body').value = replyBody;
 }
 
 function updateEmailReadStatus(email_id) {
@@ -56,10 +84,8 @@ function updateEmailReadStatus(email_id) {
     });
 }
 
-function updateEmailArchivedStatus(email_id) {
+function updateEmailArchivedStatus(email_id, isArchived) {
   console.log('starting Archive status update!');
-  // Retrieving archived status and conditionally flip it
-  let isArchived = email.archived;
   if (isArchived) {
     isArchived = false;
   } else {
@@ -80,13 +106,15 @@ function updateEmailArchivedStatus(email_id) {
       }
       // Handels successfull status update if needed
       console.log('Email Archive status updated successfully.');
+      // Load the inbox after the status update is complete
+      load_mailbox('inbox');
     })
     .catch((error) => {
       console.error('Error updating email read status:', error);
     });
 }
 
-function view_email(email_id) {
+function view_email(email_id, mailbox) {
   updateEmailReadStatus(email_id);
   // If the email is unread, it should appear with a white background. If the email has been read, it should appear with a gray background.
 
@@ -97,12 +125,17 @@ function view_email(email_id) {
       // Create a container to display the email details
       const emailContainer = document.createElement('div');
 
-      // Customize the HTML structure based on your needs
+      // Customize the HTML structure based on mailbox
       emailContainer.innerHTML = `
         <p><b>From: </b>${email.sender}</p>
         <p><b>To: </b>${email.recipients.join(', ')}</p>
         <p><b>Subject: </b>${email.subject}</p>
         <p><b>Timestamp: </b>${email.timestamp}</p>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-primary" id="replyButton">Reply</button>
+          <button type="button" class="btn btn-outline-secondary" id="archiveButton">Archive</button>
+          <button type="button" class="btn btn-outline-primary" id="unarchiveButton">Unarchive</button>
+        </div>
         <hr>
         <p>${email.body}</p>
       `;
@@ -110,6 +143,41 @@ function view_email(email_id) {
       // Append the email details to #emails-view container in the HTML
       document.querySelector('#emails-view').innerHTML = ''; // Clear existing content
       document.querySelector('#emails-view').appendChild(emailContainer);
+
+      // Set the visibility of the "Archive" and "Unarchive" buttons based on the mailbox value and their functionalities pluse the "Reply" button
+      const replyButton = document.getElementById('replyButton');
+      const archiveButton = document.getElementById('archiveButton');
+      const unarchiveButton = document.getElementById('unarchiveButton');
+
+      switch (mailbox) {
+        case 'inbox':
+          archiveButton.style.display = 'block';
+          unarchiveButton.style.display = 'none';
+          break;
+        case 'sent':
+          archiveButton.style.display = 'none';
+          unarchiveButton.style.display = 'none';
+          break;
+        case 'archive':
+          archiveButton.style.display = 'none';
+          unarchiveButton.style.display = 'block';
+          break;
+        default:
+        // Handle other mailbox values as needed
+      }
+
+      replyButton.addEventListener('click', function () {
+        // const email_id = sender.id;
+        reply_email(email);
+      });
+      archiveButton.addEventListener('click', function () {
+        // const email_id = sender.id;
+        updateEmailArchivedStatus(email_id, email.archived);
+      });
+      unarchiveButton.addEventListener('click', function () {
+        // const email_id = sender.id;
+        updateEmailArchivedStatus(email_id, email.archived);
+      });
     })
     .catch((error) => {
       console.error('Error fetching email details:', error);
@@ -120,6 +188,7 @@ function load_mailbox(mailbox) {
   // Show the mailbox and hide other views
   document.querySelector('#emails-view').style.display = 'block';
   document.querySelector('#compose-view').style.display = 'none';
+  document.querySelector('#reply-view').style.display = 'none';
 
   // Show the mailbox name
   document.querySelector('#emails-view').innerHTML = `<h3>${
@@ -158,9 +227,9 @@ function load_mailbox(mailbox) {
         }
 
         emailDiv.addEventListener('click', function () {
-          const emailId = sender.id;
-          // Call a function to view the email using the retrieved emailId
-          view_email(emailId);
+          // const email_id = sender.id;
+          // Call a function to view the email using the retrieved email_id and its mailbox
+          view_email(sender.id, mailbox);
         });
 
         // Append the email content to the #emails-view container
@@ -170,22 +239,23 @@ function load_mailbox(mailbox) {
 }
 
 function send_email() {
-  console.log('submit_email called');
+  const composeForm = document.getElementById('compose-form');
+  const replyForm = document.getElementById('reply-form');
 
-  const myForm = document.getElementById('compose-form');
+  const myForm = composeForm || replyForm;
 
   // Create a FormData object from the form
-  const formData = new FormData(myForm);
+  if (myForm) {
+    console.log(`myForm retrieved: myForm: ${myForm}`);
+    const formData = new FormData(myForm);
 
-  // Convert FormData to a plain object
-  const plainObject = {};
-  formData.forEach((value, key) => {
-    console.log(`Key: ${key}, Value: ${value}`);
-    plainObject[key] = value;
-  });
-
-  // Log the plainObject to inspect it
-  console.log('plainObject:', plainObject);
+    // Convert FormData to a plain object
+    const plainObject = {};
+    formData.forEach((value, key) => {
+      console.log(`Key: ${key}, Value: ${value}`);
+      plainObject[key] = value;
+    });
+  }
 
   fetch('/emails', {
     method: 'POST',
