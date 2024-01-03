@@ -116,7 +116,6 @@ function updateEmailArchivedStatus(email_id, isArchived) {
 
 function view_email(email_id, mailbox) {
   updateEmailReadStatus(email_id);
-  // If the email is unread, it should appear with a white background. If the email has been read, it should appear with a gray background.
 
   // Fetch the email details using the email_id
   fetch(`/emails/${email_id}`)
@@ -124,7 +123,8 @@ function view_email(email_id, mailbox) {
     .then((email) => {
       // Create a container to display the email details
       const emailContainer = document.createElement('div');
-
+      // Replace newline characters with HTML line break tags
+      const formattedBody = email.body.replace(/\n/g, '<br>');
       // Customize the HTML structure based on mailbox
       emailContainer.innerHTML = `
         <p><b>From: </b>${email.sender}</p>
@@ -137,7 +137,7 @@ function view_email(email_id, mailbox) {
           <button type="button" class="btn btn-outline-primary" id="unarchiveButton">Unarchive</button>
         </div>
         <hr>
-        <p>${email.body}</p>
+        <p>${formattedBody}</p>
       `;
 
       // Append the email details to #emails-view container in the HTML
@@ -227,7 +227,6 @@ function load_mailbox(mailbox) {
         }
 
         emailDiv.addEventListener('click', function () {
-          // const email_id = sender.id;
           // Call a function to view the email using the retrieved email_id and its mailbox
           view_email(sender.id, mailbox);
         });
@@ -239,20 +238,21 @@ function load_mailbox(mailbox) {
 }
 
 function send_email() {
+  const composeView = document.getElementById('compose-view');
   const composeForm = document.getElementById('compose-form');
   const replyForm = document.getElementById('reply-form');
 
-  const myForm = composeForm || replyForm;
+  // Check display state of one of the forms' parents and transfer visible form's data as myForm
+  const myForm =
+    composeView.style.display === 'block' ? composeForm : replyForm;
 
   // Create a FormData object from the form
+  const plainObject = {};
+  let formData;
   if (myForm) {
-    console.log(`myForm retrieved: myForm: ${myForm}`);
-    const formData = new FormData(myForm);
-
+    formData = new FormData(myForm);
     // Convert FormData to a plain object
-    const plainObject = {};
     formData.forEach((value, key) => {
-      console.log(`Key: ${key}, Value: ${value}`);
       plainObject[key] = value;
     });
   }
@@ -262,22 +262,15 @@ function send_email() {
     headers: {
       'Content-Type': 'application/json',
     },
-    // body: JSON.stringify(formData),
     body: JSON.stringify(plainObject),
   })
     .then((response) => {
-      console.log('Raw response', response);
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
       return response.json();
     })
     .then((result) => {
-      console.log(
-        'This is the returned result = response.json().body: ',
-        result.body
-      );
-      console.log(result.body);
       const element = document.createElement('div');
       element.innerHTML = result.body;
       document.querySelector('#emails-view').append(element);
